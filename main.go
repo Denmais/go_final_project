@@ -1,17 +1,14 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
-	"log"
-	"os"
-	"path/filepath"
+	"net/http"
 )
 
 type Scheduler struct {
 	ID      int
 	Title   string
-	Comment int
+	Comment string
 	Repeat  string
 	Date    string
 }
@@ -24,47 +21,36 @@ func NewSchedulerService(store SchedulerStore) SchedulerService {
 	return SchedulerService{store: store}
 }
 
-const create string = `
-  CREATE TABLE IF NOT EXISTS scheduler (
-  id INTEGER NOT NULL PRIMARY KEY,
-  date DATETIME NOT NULL,
-  comment TEXT,
-  repeat TEXT,
-  title TEXT NOT NULL
-  );`
-
 const Value = 1048576
 
 func main() {
+	CheckDB()
+	//r := chi.NewRouter()
+	http.Handle("/", http.FileServer(http.Dir("./web")))
+	http.Handle("/api/nextdate", http.HandlerFunc(HandleDate))
+	http.Handle("/api/task", http.HandlerFunc(rout))
+	http.Handle("/api/tasks", http.HandlerFunc(GetTasks))
+	http.Handle("/api/task/done", http.HandlerFunc(TaskDone))
 
-	db, err := sql.Open("sqlite", "scheduler.db")
+	err := http.ListenAndServe(":7540", nil)
 	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer db.Close()
-	store := NewSchedulerStore(db)
-	// service := NewSchedulerService(store)
-
-	appPath, err := os.Executable()
-	if err != nil {
-		log.Fatal(err)
-	}
-	dbFile := filepath.Join(filepath.Dir(appPath), "scheduler.db")
-	fmt.Println(dbFile)
-	_, err = os.Stat(dbFile)
-
-	var install bool
-	if err != nil {
-		install = true
-	}
-	fmt.Println(install)
-
-	if install == true {
-		if _, err := store.db.Exec(create); err != nil {
-			fmt.Println(err)
-			return
-		}
+		panic(err)
 	}
 
+}
+
+func rout(res http.ResponseWriter, req *http.Request) {
+	method := fmt.Sprint(req.Method)
+	if method == "GET" {
+		GetTask(res, req)
+	}
+	if method == "POST" {
+		PostTask(res, req)
+	}
+	if method == "PUT" {
+		UpdateTask(res, req)
+	}
+	if method == "DELETE" {
+		TaskDelete(res, req)
+	}
 }

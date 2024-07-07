@@ -1,38 +1,13 @@
-package main
+package api
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
+	"final/nextdate"
 	"net/http"
 	"strconv"
 	"time"
 )
-
-type Task struct {
-	Date    string `json:"date,omitempty"`
-	Title   string `json:"title"`
-	Repeat  string `json:"repeat,omitempty"`
-	Comment string `json:"comment"`
-}
-type Task2 struct {
-	ID      string `json:"id"`
-	Date    string `json:"date,omitempty"`
-	Title   string `json:"title"`
-	Repeat  string `json:"repeat,omitempty"`
-	Comment string `json:"comment"`
-}
-type Void struct {
-}
-type ErrorstrSer struct {
-	Error string `json:"error"`
-}
-type SliceSheldure struct {
-	Tasks []Task2 `json:"tasks"`
-}
-type IdSer struct {
-	ID int `json:"id"`
-}
 
 func HandleDate(res http.ResponseWriter, req *http.Request) {
 	date := req.URL.Query().Get("date")
@@ -42,7 +17,7 @@ func HandleDate(res http.ResponseWriter, req *http.Request) {
 		res.Write([]byte(err.Error()))
 	}
 	repeat := req.URL.Query().Get("repeat")
-	lastDate, err := NextDate(nowTime, date, repeat)
+	lastDate, err := nextdate.NextDate(nowTime, date, repeat)
 	if err != nil {
 		res.Write([]byte(err.Error()))
 	} else {
@@ -62,7 +37,7 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	res, errs := SheldureTaskDB(task, w)
+	res, errs := PostTaskDB(task)
 	if errs != "" {
 		resp, _ := json.Marshal(ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
@@ -77,7 +52,7 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetTasks(w http.ResponseWriter, r *http.Request) {
-	res, err := SheldureGet()
+	res, err := GetTasksDB()
 	if err != nil {
 		if res != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -105,33 +80,23 @@ func GetTask(w http.ResponseWriter, r *http.Request) {
 		w.Write(res)
 		return
 	}
-	db, err := sql.Open("sqlite", "scheduler.db")
-	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
+	res, errs := GetTaskDB(idint)
+	if errs != "" {
+		resp, _ := json.Marshal(ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
+		w.Write(resp)
 		return
 	}
-	defer db.Close()
-	var task Task2
-	row := db.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", idint))
-	err = row.Scan(&task.ID, &task.Comment, &task.Repeat, &task.Title, &task.Date)
+	ans, err := json.Marshal(res)
 	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
+		resp, _ := json.Marshal(ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
-		return
-	}
-	res, err := json.Marshal(task)
-	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
+		w.Write(resp)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(res)
+	w.Write(ans)
 }
 
 func UpdateTask(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +118,7 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, errs := SheldureUpdate(task, w)
+	_, errs := TaskUpdateDB(task)
 	if errs != "" {
 		resp, _ := json.Marshal(ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
@@ -164,73 +129,6 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(newres)
-}
-
-func TaskDone(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		res, _ := json.Marshal(ErrorstrSer{"Не указан идентификатор"})
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
-		return
-	}
-	idint, err := strconv.Atoi(id)
-
-	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Неправильно указан идентификатор"})
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
-		return
-	}
-	db, err := sql.Open("sqlite", "scheduler.db")
-	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
-		return
-	}
-	defer db.Close()
-	var task Task2
-	row := db.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", idint))
-	err = row.Scan(&task.ID, &task.Comment, &task.Repeat, &task.Title, &task.Date)
-	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
-		return
-	}
-	if task.Repeat == "" {
-		_, err := db.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", idint))
-		if err != nil {
-			res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(res)
-			return
-		}
-		res, _ := json.Marshal(Void{})
-		w.WriteHeader(http.StatusOK)
-		w.Write(res)
-		return
-	} else {
-		str, err := NextDate(time.Now(), task.Date, task.Repeat)
-		if err != nil {
-			res, _ := json.Marshal(ErrorstrSer{str})
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(res)
-			return
-		}
-		db.Exec("UPDATE scheduler SET title = :title, repeat = :repeat, date = :date, comment = :comment WHERE id = :id",
-			sql.Named("title", task.Title),
-			sql.Named("repeat", task.Repeat),
-			sql.Named("date", str),
-			sql.Named("comment", task.Comment),
-			sql.Named("id", idint))
-
-		res, _ := json.Marshal(Void{})
-		w.WriteHeader(http.StatusOK)
-		w.Write(res)
-		return
-	}
 }
 
 func TaskDelete(w http.ResponseWriter, r *http.Request) {
@@ -249,32 +147,46 @@ func TaskDelete(w http.ResponseWriter, r *http.Request) {
 		w.Write(res)
 		return
 	}
-	db, err := sql.Open("sqlite", "scheduler.db")
-	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
+	errs := TaskDeleteDB(idint)
+	if errs != "" {
+		res, _ := json.Marshal(ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
-		return
 	}
-	defer db.Close()
-	var task Task2
-	row := db.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", idint))
-	err = row.Scan(&task.ID, &task.Comment, &task.Repeat, &task.Title, &task.Date)
-	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
-		return
-	}
-	_, err = db.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", idint))
-	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
-		return
-	}
+
 	res, _ := json.Marshal(Void{})
 	w.WriteHeader(http.StatusOK)
 	w.Write(res)
 	return
+
+}
+
+func TaskDone(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		res, _ := json.Marshal(ErrorstrSer{"Не указан идентификатор"})
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(res)
+		return
+	}
+	idint, err := strconv.Atoi(id)
+
+	if err != nil {
+		res, _ := json.Marshal(ErrorstrSer{"Неправильно указан идентификатор"})
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(res)
+		return
+	}
+	errs := TaskDoneDB(idint)
+	if errs != "" {
+		res, _ := json.Marshal(ErrorstrSer{errs})
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(res)
+	}
+
+	res, _ := json.Marshal(Void{})
+	w.WriteHeader(http.StatusOK)
+	w.Write(res)
+	return
+
 }

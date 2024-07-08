@@ -1,4 +1,4 @@
-package api
+package db
 
 import (
 	"database/sql"
@@ -10,12 +10,31 @@ import (
 const create string = `
   CREATE TABLE IF NOT EXISTS scheduler (
   id INTEGER NOT NULL PRIMARY KEY,
-  date TEXT,
+  date CHAR(8),
   comment TEXT,
-  repeat TEXT,
+  repeat VARCHAR(128),
   title TEXT NOT NULL
   );
   CREATE INDEX task_date ON scheduler (date);`
+
+type DB struct {
+	db *sql.DB
+}
+
+func NewDB(filePath string) (DB, error) {
+	db, err := sql.Open("sqlite", filePath)
+	if err != nil {
+		return DB{}, err
+	}
+
+	return DB{db: db}, nil
+}
+
+var Data DB
+
+func (db DB) Close() error {
+	return db.db.Close()
+}
 
 func CheckDB() {
 

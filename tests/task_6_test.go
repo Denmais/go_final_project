@@ -97,7 +97,6 @@ func TestEditTask(t *testing.T) {
 
 	updateTask := func(newVals map[string]any) {
 		mupd, err := postJSON("api/task", newVals, http.MethodPut)
-		fmt.Println(mupd, err)
 		assert.NoError(t, err)
 
 		e, ok := mupd["error"]

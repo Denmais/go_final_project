@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"final/db"
 	"final/nextdate"
 	"net/http"
 	"strconv"
@@ -12,7 +13,7 @@ import (
 func HandleDate(res http.ResponseWriter, req *http.Request) {
 	date := req.URL.Query().Get("date")
 	now := req.URL.Query().Get("now")
-	nowTime, err := time.Parse("20060102", now)
+	nowTime, err := time.Parse(nextdate.Date, now)
 	if err != nil {
 		res.Write([]byte(err.Error()))
 	}
@@ -26,7 +27,7 @@ func HandleDate(res http.ResponseWriter, req *http.Request) {
 }
 
 func PostTask(w http.ResponseWriter, r *http.Request) {
-	var task Task
+	var task db.Task
 	var buf bytes.Buffer
 
 	_, err := buf.ReadFrom(r.Body)
@@ -37,37 +38,48 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	res, errs := PostTaskDB(task)
+	res, errs := db.Data.PostTaskDB(task)
 	if errs != "" {
-		resp, _ := json.Marshal(ErrorstrSer{errs})
+		resp, _ := json.Marshal(db.ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
 	}
-	Serializer := IdSer{ID: int(res)}
-	newres, _ := json.Marshal(Serializer)
+	Serializer := db.IdSer{ID: int(res)}
+	newres, err := json.Marshal(Serializer)
+	if err != nil {
+		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(resp)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(newres)
 }
 
 func GetTasks(w http.ResponseWriter, r *http.Request) {
-	res, err := GetTasksDB()
+	res, err := db.Data.GetTasksDB()
 	if err != nil {
-		if res != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp, err := json.Marshal(res)
+	if err != nil {
+		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(resp)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(res)
+	w.Write(resp)
 }
 
 func GetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		res, _ := json.Marshal(ErrorstrSer{"Не указан идентификатор"})
+		res, _ := json.Marshal(db.ErrorstrSer{"Не указан идентификатор"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
@@ -75,21 +87,21 @@ func GetTask(w http.ResponseWriter, r *http.Request) {
 	idint, err := strconv.Atoi(id)
 
 	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Неправильно указан идентификатор"})
+		res, _ := json.Marshal(db.ErrorstrSer{"Неправильно указан идентификатор"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
 	}
-	res, errs := GetTaskDB(idint)
+	res, errs := db.Data.GetTaskDB(idint)
 	if errs != "" {
-		resp, _ := json.Marshal(ErrorstrSer{errs})
+		resp, _ := json.Marshal(db.ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
 	}
 	ans, err := json.Marshal(res)
 	if err != nil {
-		resp, _ := json.Marshal(ErrorstrSer{errs})
+		resp, _ := json.Marshal(db.ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
@@ -100,32 +112,32 @@ func GetTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateTask(w http.ResponseWriter, r *http.Request) {
-	var task Task2
+	var task db.Task
 	var buf bytes.Buffer
 
 	_, err := buf.ReadFrom(r.Body)
 	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
+		res, _ := json.Marshal(db.ErrorstrSer{"Ошибка сервера"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
 	}
 
 	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Ошибка сервера"})
+		res, _ := json.Marshal(db.ErrorstrSer{"Ошибка сервера"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
 	}
 
-	_, errs := TaskUpdateDB(task)
+	_, errs := db.Data.TaskUpdateDB(task)
 	if errs != "" {
-		resp, _ := json.Marshal(ErrorstrSer{errs})
+		resp, _ := json.Marshal(db.ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
 	}
-	newres, _ := json.Marshal(Void{})
+	newres, _ := json.Marshal(db.Void{})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(newres)
@@ -134,7 +146,7 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 func TaskDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		res, _ := json.Marshal(ErrorstrSer{"Не указан идентификатор"})
+		res, _ := json.Marshal(db.ErrorstrSer{"Не указан идентификатор"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
@@ -142,19 +154,19 @@ func TaskDelete(w http.ResponseWriter, r *http.Request) {
 	idint, err := strconv.Atoi(id)
 
 	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Неправильно указан идентификатор"})
+		res, _ := json.Marshal(db.ErrorstrSer{"Неправильно указан идентификатор"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
 	}
-	errs := TaskDeleteDB(idint)
+	errs := db.Data.TaskDeleteDB(idint)
 	if errs != "" {
-		res, _ := json.Marshal(ErrorstrSer{errs})
+		res, _ := json.Marshal(db.ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 	}
 
-	res, _ := json.Marshal(Void{})
+	res, _ := json.Marshal(db.Void{})
 	w.WriteHeader(http.StatusOK)
 	w.Write(res)
 	return
@@ -164,7 +176,7 @@ func TaskDelete(w http.ResponseWriter, r *http.Request) {
 func TaskDone(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
-		res, _ := json.Marshal(ErrorstrSer{"Не указан идентификатор"})
+		res, _ := json.Marshal(db.ErrorstrSer{"Не указан идентификатор"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
@@ -172,19 +184,19 @@ func TaskDone(w http.ResponseWriter, r *http.Request) {
 	idint, err := strconv.Atoi(id)
 
 	if err != nil {
-		res, _ := json.Marshal(ErrorstrSer{"Неправильно указан идентификатор"})
+		res, _ := json.Marshal(db.ErrorstrSer{"Неправильно указан идентификатор"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
 	}
-	errs := TaskDoneDB(idint)
+	errs := db.Data.TaskDoneDB(idint)
 	if errs != "" {
-		res, _ := json.Marshal(ErrorstrSer{errs})
+		res, _ := json.Marshal(db.ErrorstrSer{errs})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 	}
 
-	res, _ := json.Marshal(Void{})
+	res, _ := json.Marshal(db.Void{})
 	w.WriteHeader(http.StatusOK)
 	w.Write(res)
 	return

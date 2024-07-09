@@ -14,16 +14,20 @@ func HandleDate(res http.ResponseWriter, req *http.Request) {
 	date := req.URL.Query().Get("date")
 	now := req.URL.Query().Get("now")
 	nowTime, err := time.Parse(nextdate.Date, now)
+
 	if err != nil {
 		res.Write([]byte(err.Error()))
 	}
+
 	repeat := req.URL.Query().Get("repeat")
 	lastDate, err := nextdate.NextDate(nowTime, date, repeat)
+
 	if err != nil {
 		res.Write([]byte(err.Error()))
 	} else {
 		res.Write([]byte(lastDate))
 	}
+
 }
 
 func PostTask(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +35,7 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 	var buf bytes.Buffer
 
 	_, err := buf.ReadFrom(r.Body)
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -38,21 +43,26 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	res, errs := db.Data.AddTask(task)
-	if errs != nil {
-		resp, _ := json.Marshal(db.ErrorstrSer{errs.Error()})
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(resp)
-		return
-	}
-	Serializer := db.IdSer{ID: int(res)}
-	newres, err := json.Marshal(Serializer)
+
+	res, err := db.Data.AddTask(task)
+
 	if err != nil {
 		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
 	}
+
+	serializer := db.IdSer{ID: int(res)}
+	newres, err := json.Marshal(serializer)
+
+	if err != nil {
+		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(resp)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(newres)
@@ -60,17 +70,21 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 
 func GetTasks(w http.ResponseWriter, r *http.Request) {
 	res, err := db.Data.GetTasks()
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	resp, err := json.Marshal(res)
+
 	if err != nil {
 		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(resp)
@@ -78,12 +92,14 @@ func GetTasks(w http.ResponseWriter, r *http.Request) {
 
 func GetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
+
 	if id == "" {
 		res, _ := json.Marshal(db.ErrorstrSer{"Не указан идентификатор"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
 	}
+
 	idint, err := strconv.Atoi(id)
 
 	if err != nil {
@@ -92,20 +108,25 @@ func GetTask(w http.ResponseWriter, r *http.Request) {
 		w.Write(res)
 		return
 	}
+
 	res, err := db.Data.GetTask(idint)
+
 	if err != nil {
 		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
 	}
+
 	ans, err := json.Marshal(res)
+
 	if err != nil {
 		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(ans)
@@ -137,7 +158,10 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 		w.Write(resp)
 		return
 	}
-	newres, _ := json.Marshal(db.Void{})
+	newres, err := json.Marshal(db.Void{})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(newres)
@@ -151,6 +175,7 @@ func TaskDelete(w http.ResponseWriter, r *http.Request) {
 		w.Write(res)
 		return
 	}
+
 	idint, err := strconv.Atoi(id)
 
 	if err != nil {
@@ -160,13 +185,17 @@ func TaskDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = db.Data.Delete(idint)
+
 	if err != nil {
 		res, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 	}
 
-	res, _ := json.Marshal(db.Void{})
+	res, err := json.Marshal(db.Void{})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(res)
 	return
@@ -175,12 +204,14 @@ func TaskDelete(w http.ResponseWriter, r *http.Request) {
 
 func TaskDone(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
+
 	if id == "" {
 		res, _ := json.Marshal(db.ErrorstrSer{"Не указан идентификатор"})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 		return
 	}
+
 	idint, err := strconv.Atoi(id)
 
 	if err != nil {
@@ -189,6 +220,7 @@ func TaskDone(w http.ResponseWriter, r *http.Request) {
 		w.Write(res)
 		return
 	}
+
 	err = db.Data.TaskDone(idint)
 	if err != nil {
 		res, _ := json.Marshal(db.ErrorstrSer{err.Error()})

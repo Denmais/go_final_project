@@ -11,10 +11,13 @@ import (
 func main() {
 	db.CheckDB()
 	var err error
+
 	if db.Data, err = db.NewDB("scheduler.db"); err != nil {
 		log.Panic(err)
 	}
+
 	defer db.Data.Close()
+
 	http.Handle("/", http.FileServer(http.Dir("./web")))
 	http.Handle("/api/nextdate", http.HandlerFunc(api.HandleDate))
 	http.Handle("/api/task", http.HandlerFunc(rout))
@@ -22,6 +25,7 @@ func main() {
 	http.Handle("/api/task/done", http.HandlerFunc(api.TaskDone))
 
 	err = http.ListenAndServe(":7540", nil)
+
 	if err != nil {
 		panic(err)
 	}
@@ -30,6 +34,7 @@ func main() {
 
 func rout(res http.ResponseWriter, req *http.Request) {
 	method := fmt.Sprint(req.Method)
+
 	if method == "GET" {
 		api.GetTask(res, req)
 	}

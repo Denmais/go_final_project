@@ -22,9 +22,11 @@ func (db DB) AddTask(task Task) (int, error) {
 		sql.Named("comment", task.Comment),
 		sql.Named("repeat", task.Repeat),
 		sql.Named("date", task.Date))
+
 	if err != nil {
 		return 0, err
 	}
+
 	id, _ := res.LastInsertId()
 
 	return int(id), nil
@@ -34,21 +36,25 @@ func (db DB) GetTasks() (Tasks, error) {
 
 	tasks := Tasks{}
 	sliceSheldure := []Task{}
-	rows, err := db.database.Query("SELECT * FROM scheduler")
+	rows, err := db.database.Query("SELECT id, date, comment, repeat, title FROM scheduler")
+
 	if err != nil {
 		return Tasks{}, err
 	}
+
 	defer rows.Close()
+
 	for rows.Next() {
 		task := Task{}
 		var id int
-		err := rows.Scan(&id, &task.Title, &task.Comment, &task.Repeat, &task.Date)
+		err := rows.Scan(&id, &task.Date, &task.Comment, &task.Repeat, &task.Title)
 		if err != nil {
 			return Tasks{}, err
 		}
 		task.ID = fmt.Sprint(id)
 		sliceSheldure = append(sliceSheldure, task)
 	}
+
 	tasks.Tasks = sliceSheldure
 	return tasks, nil
 }
@@ -59,15 +65,18 @@ func (db DB) TaskUpdate(task Task) error {
 	if err != nil {
 		return err
 	}
+
 	id, err := strconv.Atoi(task.ID)
 	if err != nil {
 		return err
 	}
+
 	row := db.database.QueryRow("SELECT id FROM scheduler WHERE id = :id", sql.Named("id", id))
 	err = row.Scan(&id)
 	if err != nil {
 		return err
 	}
+
 	db.database.Exec("UPDATE scheduler SET date = :date, title = :title, comment = :comment, repeat = :repeat WHERE id = :id",
 		sql.Named("title", task.Title),
 		sql.Named("date", task.Date),
@@ -87,6 +96,7 @@ func (db DB) TaskDone(id int) error {
 	if err != nil {
 		return err
 	}
+
 	if task.Repeat == "" {
 		_, err := db.database.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", id))
 		if err != nil {
@@ -115,10 +125,12 @@ func (db DB) Delete(id int) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = db.database.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", id))
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 

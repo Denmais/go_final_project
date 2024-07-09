@@ -38,9 +38,9 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	res, errs := db.Data.PostTaskDB(task)
-	if errs != "" {
-		resp, _ := json.Marshal(db.ErrorstrSer{errs})
+	res, errs := db.Data.AddTask(task)
+	if errs != nil {
+		resp, _ := json.Marshal(db.ErrorstrSer{errs.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
@@ -59,7 +59,7 @@ func PostTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetTasks(w http.ResponseWriter, r *http.Request) {
-	res, err := db.Data.GetTasksDB()
+	res, err := db.Data.GetTasks()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -92,16 +92,16 @@ func GetTask(w http.ResponseWriter, r *http.Request) {
 		w.Write(res)
 		return
 	}
-	res, errs := db.Data.GetTaskDB(idint)
-	if errs != "" {
-		resp, _ := json.Marshal(db.ErrorstrSer{errs})
+	res, err := db.Data.GetTask(idint)
+	if err != nil {
+		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
 	}
 	ans, err := json.Marshal(res)
 	if err != nil {
-		resp, _ := json.Marshal(db.ErrorstrSer{errs})
+		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
@@ -130,9 +130,9 @@ func UpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, errs := db.Data.TaskUpdateDB(task)
-	if errs != "" {
-		resp, _ := json.Marshal(db.ErrorstrSer{errs})
+	err = db.Data.TaskUpdate(task)
+	if err != nil {
+		resp, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(resp)
 		return
@@ -159,9 +159,9 @@ func TaskDelete(w http.ResponseWriter, r *http.Request) {
 		w.Write(res)
 		return
 	}
-	errs := db.Data.TaskDeleteDB(idint)
-	if errs != "" {
-		res, _ := json.Marshal(db.ErrorstrSer{errs})
+	err = db.Data.Delete(idint)
+	if err != nil {
+		res, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 	}
@@ -189,9 +189,9 @@ func TaskDone(w http.ResponseWriter, r *http.Request) {
 		w.Write(res)
 		return
 	}
-	errs := db.Data.TaskDoneDB(idint)
-	if errs != "" {
-		res, _ := json.Marshal(db.ErrorstrSer{errs})
+	err = db.Data.TaskDone(idint)
+	if err != nil {
+		res, _ := json.Marshal(db.ErrorstrSer{err.Error()})
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(res)
 	}

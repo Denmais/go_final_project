@@ -10,77 +10,33 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func NewStore(db *sql.DB) SchedulerStore {
-	return SchedulerStore{db: db}
-}
-func (db DB) Add(p Task) string {
+func (db DB) AddTask(task Task) (int, error) {
 
-	res, err := db.db.Exec("INSERT INTO scheduler (title, comment, repeat, date) VALUES (:title, :comment, :repeat, :date)",
-		sql.Named("title", p.Title),
-		sql.Named("comment", p.Comment),
-		sql.Named("repeat", p.Repeat),
-		sql.Named("date", p.Date))
+	err := task.CheckTask()
 	if err != nil {
-		return "error"
-	}
-	id, _ := res.LastInsertId()
-	idstr := strconv.FormatInt(id, 10)
-
-	return idstr
-}
-
-func (task *Task) CheckTaskDB() string {
-	now := time.Now().Format(nextdate.Date)
-	if task.Date == "" {
-		task.Date = now
-	}
-
-	_, err := time.Parse(nextdate.Date, task.Date)
-	if err != nil {
-		return "Неправильный формат даты"
-	}
-	if task.Title == "" {
-		return "Не указан заголовок"
-	}
-	if task.Date < now && task.Repeat == "" {
-		task.Date = now
-	} else if task.Date < now && task.Repeat != "" {
-		task.Date, err = nextdate.NextDate(time.Now(), task.Date, task.Repeat)
-		if err != nil {
-			return "Неправильный формат даты"
-		}
-
-	}
-	_, err = nextdate.NextDate(time.Now(), task.Date, task.Repeat)
-	if err != nil {
-		return "ошибка в данных"
-	}
-	return ""
-}
-
-func (db DB) PostTaskDB(task Task) (int, string) {
-
-	err := task.CheckTaskDB()
-	if err != "" {
 		return -1, err
 	}
 
-	newres := db.Add(task)
-	if newres == "error" {
-		return -1, "ошибка в данных"
+	res, err := db.database.Exec("INSERT INTO scheduler (title, comment, repeat, date) VALUES (:title, :comment, :repeat, :date)",
+		sql.Named("title", task.Title),
+		sql.Named("comment", task.Comment),
+		sql.Named("repeat", task.Repeat),
+		sql.Named("date", task.Date))
+	if err != nil {
+		return 0, err
 	}
-	ans, _ := strconv.Atoi(newres)
+	id, _ := res.LastInsertId()
 
-	return ans, ""
+	return int(id), nil
 }
 
-func (db DB) GetTasksDB() (SliceSheldure, error) {
+func (db DB) GetTasks() (Tasks, error) {
 
-	tasks := SliceSheldure{}
+	tasks := Tasks{}
 	sliceSheldure := []Task{}
-	rows, err := db.db.Query("SELECT * FROM scheduler")
+	rows, err := db.database.Query("SELECT * FROM scheduler")
 	if err != nil {
-		return SliceSheldure{}, err
+		return Tasks{}, err
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -88,7 +44,7 @@ func (db DB) GetTasksDB() (SliceSheldure, error) {
 		var id int
 		err := rows.Scan(&id, &task.Title, &task.Comment, &task.Repeat, &task.Date)
 		if err != nil {
-			return SliceSheldure{}, err
+			return Tasks{}, err
 		}
 		task.ID = fmt.Sprint(id)
 		sliceSheldure = append(sliceSheldure, task)
@@ -97,91 +53,82 @@ func (db DB) GetTasksDB() (SliceSheldure, error) {
 	return tasks, nil
 }
 
-func (db DB) TaskUpdateDB(task Task) (int, string) {
-	err := task.CheckTaskDB()
+func (db DB) TaskUpdate(task Task) error {
+	err := task.CheckTask()
 
-	if err != "" {
-		return -1, err
-	}
-	errnew := db.Update(task)
-	if errnew != nil {
-		return -1, errnew.Error()
-	}
-	return 0, ""
-
-}
-
-func (db DB) Update(p Task) error {
-
-	id, err := strconv.Atoi(p.ID)
 	if err != nil {
 		return err
 	}
-	row := db.db.QueryRow("SELECT id FROM scheduler WHERE id = :id", sql.Named("id", id))
+	id, err := strconv.Atoi(task.ID)
+	if err != nil {
+		return err
+	}
+	row := db.database.QueryRow("SELECT id FROM scheduler WHERE id = :id", sql.Named("id", id))
 	err = row.Scan(&id)
 	if err != nil {
 		return err
 	}
-	db.db.Exec("UPDATE scheduler SET date = :date, title = :title, comment = :comment, repeat = :repeat WHERE id = :id",
-		sql.Named("title", p.Title),
-		sql.Named("date", p.Date),
-		sql.Named("comment", p.Comment),
-		sql.Named("repeat", p.Repeat),
+	db.database.Exec("UPDATE scheduler SET date = :date, title = :title, comment = :comment, repeat = :repeat WHERE id = :id",
+		sql.Named("title", task.Title),
+		sql.Named("date", task.Date),
+		sql.Named("comment", task.Comment),
+		sql.Named("repeat", task.Repeat),
 		sql.Named("id", id))
 
 	return nil
+
 }
 
-func (db DB) TaskDoneDB(id int) string {
+func (db DB) TaskDone(id int) error {
 
 	var task Task
-	row := db.db.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", id))
+	row := db.database.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", id))
 	err := row.Scan(&task.ID, &task.Comment, &task.Repeat, &task.Title, &task.Date)
 	if err != nil {
-		return err.Error()
+		return err
 	}
 	if task.Repeat == "" {
-		_, err := db.db.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", id))
+		_, err := db.database.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", id))
 		if err != nil {
-			return err.Error()
+			return err
 		}
-		return ""
+		return nil
 	} else {
 		str, err := nextdate.NextDate(time.Now(), task.Date, task.Repeat)
 		if err != nil {
-			return err.Error()
+			return err
 		}
-		db.db.Exec("UPDATE scheduler SET title = :title, repeat = :repeat, date = :date, comment = :comment WHERE id = :id",
+		db.database.Exec("UPDATE scheduler SET title = :title, repeat = :repeat, date = :date, comment = :comment WHERE id = :id",
 			sql.Named("title", task.Title),
 			sql.Named("repeat", task.Repeat),
 			sql.Named("date", str),
 			sql.Named("comment", task.Comment),
 			sql.Named("id", id))
 
-		return ""
+		return nil
 	}
 }
-func (db DB) TaskDeleteDB(id int) string {
+func (db DB) Delete(id int) error {
 	var task Task
-	row := db.db.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", id))
+	row := db.database.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", id))
 	err := row.Scan(&task.ID, &task.Comment, &task.Repeat, &task.Title, &task.Date)
 	if err != nil {
-		return err.Error()
+		return err
 	}
-	_, err = db.db.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", id))
+	_, err = db.database.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", id))
 	if err != nil {
-		return err.Error()
+		return err
 	}
-	return ""
+	return nil
 }
 
-func (db DB) GetTaskDB(id int) (Task, string) {
+func (db DB) GetTask(id int) (Task, error) {
 	var task Task
-	row := db.db.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", id))
+	row := db.database.QueryRow("SELECT id, comment, repeat, title, date FROM scheduler WHERE id = :id", sql.Named("id", id))
 	err := row.Scan(&task.ID, &task.Comment, &task.Repeat, &task.Title, &task.Date)
 	if err != nil {
-		return Task{}, err.Error()
+		return Task{}, err
 	}
-	return task, ""
+	return task, nil
 
 }

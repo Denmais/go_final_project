@@ -8,8 +8,6 @@ import (
 	"net/http"
 )
 
-const Value = 1048576
-
 func main() {
 	db.CheckDB()
 	var err error

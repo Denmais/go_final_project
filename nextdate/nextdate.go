@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
+const Date = "20060102"
+
 func NextDate(now time.Time, date string, repeat string) (string, error) {
-	last, err := time.Parse("20060102", date)
+	last, err := time.Parse(Date, date)
 	var deltaInt int
 	if err != nil {
 		return "", err
@@ -58,5 +60,5 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 	} else {
 		return "", fmt.Errorf("invalid date format")
 	}
-	return last.Format("20060102"), nil
+	return last.Format(Date), nil
 }

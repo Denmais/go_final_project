@@ -18,7 +18,7 @@ const create string = `
   CREATE INDEX task_date ON scheduler (date);`
 
 type DB struct {
-	db *sql.DB
+	database *sql.DB
 }
 
 func NewDB(filePath string) (DB, error) {
@@ -27,13 +27,13 @@ func NewDB(filePath string) (DB, error) {
 		return DB{}, err
 	}
 
-	return DB{db: db}, nil
+	return DB{database: db}, nil
 }
 
 var Data DB
 
 func (db DB) Close() error {
-	return db.db.Close()
+	return db.database.Close()
 }
 
 func CheckDB() {
